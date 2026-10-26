@@ -129,6 +129,21 @@ h1{font-size:clamp(34px,5vw,56px);font-weight:500;letter-spacing:-.04em;line-hei
 .tag{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);background:var(--accent-wash);border-radius:6px;padding:2px 7px;margin-left:8px;vertical-align:2px}
 .mine-box{background:var(--panel);border-radius:12px;margin-top:36px;padding:14px}
 .mine-box+.mine-box{margin-top:12px}
+.pg.over,.newsect.over{outline:2px dashed var(--accent);outline-offset:6px;border-radius:12px}
+.newsect{margin-top:40px;border:1px dashed var(--line);border-radius:12px;padding:14px;text-align:center;font-family:"Geist Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);cursor:pointer;background:none;width:100%}
+.newsect:hover,.newsect.over{border-color:var(--accent);color:var(--accent-text)}
+.newsect.editing{cursor:default;text-align:left;padding:12px;border-style:solid}
+.pgt .ct+.sact{margin-left:auto}
+.sact{background:none;border:0;padding:0;color:var(--faint);font-size:10px;letter-spacing:.08em;text-transform:uppercase;text-decoration:underline;text-underline-offset:3px;font-family:"Geist Mono",monospace;cursor:pointer;font-weight:400}
+.sact:hover{color:var(--ink)}
+.sectedit,.pk.confirm{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
+.sectedit{margin:0 0 12px}
+.sectedit .btns,.pk.confirm .btns{margin-top:10px}
+.pk.confirm{cursor:default;transform:none}
+.pk.confirm p{margin:0;font-size:13px;line-height:1.45;color:var(--ink)}
+.pk.confirm p+p{margin-top:6px;color:var(--muted);font-size:12.5px}
+.pk.confirm:hover{border-color:var(--line);box-shadow:var(--shadow);transform:none}
+.sectedit .ghmsg{margin-top:8px}
 .ghrow{display:flex;gap:8px;margin-top:12px}
 .ghrow .search{margin-top:0;flex:1;min-width:0}
 .ghmsg{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:var(--faint)}
@@ -565,11 +580,23 @@ function renderLib(){
     if(q && !(s.label + " " + s.name + " " + (s.gives || s.blurb || "")).toLowerCase().includes(q)) return;
     (groups[s.group] = groups[s.group] || []).push(s);
   });
-  const order = Object.keys(groups).sort((a, b) => (b === "My skills") - (a === "My skills"));
+  const order = [];
+  if(groups["My skills"]) order.push("My skills");
+  [...new Set(SHARED.map(s => s.group))].forEach(g => { if(groups[g]) order.push(g); });
+  SECTIONS.forEach(g => { if(!q || groups[g]) order.push(g); });
+  Object.keys(groups).forEach(g => { if(!order.includes(g)) order.push(g); });
   let html = "";
   for(const g of order){
-    html += `<div class="pg"><h3 class="pgt">${e(g)}<span class="ct">${groups[g].length}</span></h3>`;
-    groups[g].forEach(s => {
+    const items = groups[g] || [], custom = SECTIONS.includes(g);
+    const acts = custom ? `<span class="sact" role="button" tabindex="0" data-sectrename="${e(g)}">Rename</span><span class="sact" role="button" tabindex="0" data-sectdelete="${e(g)}">Delete</span>` : "";
+    html += `<div class="pg" data-sect="${e(g)}">`;
+    if(sectEdit && sectEdit.mode === "rename" && sectEdit.from === g) html += `<div class="sectedit">${sectEditHTML()}</div>`;
+    else if(sectConfirm === g) html += `<div class="sectedit" role="alertdialog" aria-label="Confirm deleting section"><p class="ghmsg err">Delete the section &ldquo;${e(g)}&rdquo;? Its ${items.length} skill${items.length === 1 ? "" : "s"} will move to My skills. No skill is removed.</p>
+      <div class="btns"><button class="btn" data-sectdeleteok="${e(g)}">Delete section</button><button class="edit q" data-sectcancel>Cancel</button></div></div>`;
+    else html += `<h3 class="pgt">${e(g)}<span class="ct">${items.length}</span>${acts}</h3>`;
+    if(!items.length) html += `<p class="hint">Empty. Drag one of your skills here.</p>`;
+    items.forEach(s => {
+      if(confirmRemove === s.name){ html += confirmCard(s); return; }
       if(renaming === s.name){
         html += `<div class="pk"><span class="lab">Name for this skill</span><input class="ta" data-renameinput="${e(s.name)}" value="${e(s.label)}"></div>`; return;
       }
@@ -577,13 +604,16 @@ function renderLib(){
         <span class="add">+ Add</span>
         <div class="pn2">${e(s.label)}${s.src ? '<span class="tag">GitHub</span>' : s.mine ? '<span class="tag">Mine</span>' : ""}</div>
         <div class="g">${e(s.gives || s.blurb)}</div>${s.when ? `<div class="w">${e(s.when)}</div>` : ""}
-        ${s.src ? `<span class="srclink" role="link" tabindex="0" data-srcurl="${e(s.srcUrl)}">${e(s.src)}</span>` : ""}${s.mine ? `<span class="rename" role="button" tabindex="0" data-rename="${e(s.name)}">Rename</span>` : ""}</button>`;
+        ${s.src ? `<span class="srclink" role="link" tabindex="0" data-srcurl="${e(s.srcUrl)}">${e(s.src)}</span>` : ""}${s.mine ? `<span class="rename" role="button" tabindex="0" data-rename="${e(s.name)}">Rename</span> <span class="rename" role="button" tabindex="0" data-removeskill="${e(s.name)}">Remove</span>` : ""}</button>`;
     });
     html += `</div>`;
   }
-  if(!html) html = `<p class="hint">No skills match.</p>`;
+  if(!order.length) html = `<p class="hint">No skills match.</p>`;
+  html += sectEdit && sectEdit.mode === "new" ? `<div class="newsect editing" data-newsect>${sectEditHTML()}</div>`
+    : `<button class="newsect" type="button" data-newsect>+ New section</button>`;
   html += `<div class="mine-box"><span class="lab">Skills on your laptop</span>
-    <div class="btns"><button class="btn" id="btn-local">Add skills from my laptop</button>${LOCAL.length ? `<button class="edit q" id="btn-forget">Forget mine</button>` : ""}</div>
+    <div class="btns"><button class="btn" id="btn-local">Add skills from my laptop</button>${LOCAL.length && !confirmForget ? `<button class="edit q" id="btn-forget">Forget mine</button>` : ""}</div>
+    ${confirmForget ? `<p class="ghmsg err" role="alertdialog">Remove all ${LOCAL.length} of your skills from the library, including the ones from GitHub? Your sections stay.</p><div class="btns"><button class="btn" data-forgetok>Remove all</button><button class="edit q" data-forgetcancel>Cancel</button></div>` : ""}
     <p class="hint">Choose your skills folder. In the dialog press Cmd+Shift+G and type <code>~/.agents/skills</code>. Nothing is uploaded: the page only reads names and descriptions.</p></div>
     <div class="mine-box"><span class="lab">Skills on GitHub</span>
     <div class="ghrow"><input class="search" id="ghurl" type="url" placeholder="github.com/owner/repo" aria-label="GitHub repository address" value="${e(ghUrl)}" autocomplete="off" spellcheck="false"><button class="btn" id="btn-gh"${ghBusy ? " disabled" : ""}>${ghBusy ? "Looking..." : "Add"}</button></div>
@@ -684,8 +714,8 @@ async function readFolder(files){
 $("#localfolder").addEventListener("change", async ev => {
   const found = await readFolder([...ev.target.files]); ev.target.value = "";
   if(!found.length){ toast("No skills found. Choose the skills folder itself"); return; }
-  const labels = Object.fromEntries(LOCAL.map(l => [l.name, l.label]));
-  LOCAL = found.map(f => ({...f, label: labels[f.name] || f.label})).concat(LOCAL.filter(l => l.src && !found.some(f => f.name === l.name)));
+  const prev = Object.fromEntries(LOCAL.map(l => [l.name, l]));
+  LOCAL = found.map(f => ({...f, label: prev[f.name]?.label || f.label, group: prev[f.name]?.group || f.group})).concat(LOCAL.filter(l => l.src && !found.some(f => f.name === l.name)));
   saveLocal(); rebuildSkills(); render(); toast(found.length + " skills added from your laptop");
 });
 (function(){ const saved = store("wfb.local"); if(Array.isArray(saved)){ LOCAL = saved; rebuildSkills(); } })();
@@ -693,6 +723,73 @@ function finishRename(input){
   const n = input.dataset.renameinput, v = input.value.trim(), l = LOCAL.find(x => x.name === n);
   if(l && v) l.label = v;
   renaming = null; saveLocal(); rebuildSkills(); render();
+}
+
+/* ---------- sections, moving and removing your skills ---------- */
+let SECTIONS = store("wfb.sections"); if(!Array.isArray(SECTIONS)) SECTIONS = [];
+(function(){ const known = new Set(["My skills", ...SHARED.map(s => s.group), ...SECTIONS]);
+  LOCAL.forEach(l => { if(l.group && !known.has(l.group)){ SECTIONS.push(l.group); known.add(l.group); } }); })();
+let sectEdit = null;       // {mode:"new"|"rename", skill, from, value, err}
+let sectConfirm = null;    // section name awaiting delete confirmation
+let confirmRemove = null;  // skill name awaiting remove confirmation
+let confirmForget = false;
+const saveSections = () => store("wfb.sections", SECTIONS);
+function sectionNameError(v, except){
+  v = v.trim();
+  if(!v) return "Give the section a name.";
+  if(v.length > 40) return "Keep it under 40 characters.";
+  const taken = ["My skills", ...SHARED.map(s => s.group), ...SECTIONS].filter(x => x !== except);
+  if(taken.some(x => x.toLowerCase() === v.toLowerCase())) return "A section with that name already exists.";
+  return "";
+}
+function submitSection(){
+  if(!sectEdit) return;
+  const v = sectEdit.value.trim(), err = sectionNameError(v, sectEdit.mode === "rename" ? sectEdit.from : null);
+  if(err){ sectEdit.err = err; renderLib(); document.querySelector("#sectname")?.focus(); return; }
+  if(sectEdit.mode === "new"){
+    SECTIONS.push(v);
+    const l = sectEdit.skill && LOCAL.find(x => x.name === sectEdit.skill); if(l) l.group = v;
+  } else {
+    SECTIONS = SECTIONS.map(x => x === sectEdit.from ? v : x);
+    LOCAL.forEach(l => { if(l.group === sectEdit.from) l.group = v; });
+  }
+  sectEdit = null; saveSections(); saveLocal(); rebuildSkills(); renderLib();
+}
+function deleteSection(name){
+  LOCAL.forEach(l => { if(l.group === name) l.group = "My skills"; });
+  SECTIONS = SECTIONS.filter(x => x !== name); sectConfirm = null;
+  saveSections(); saveLocal(); rebuildSkills(); renderLib();
+}
+function moveToSection(skill, group){
+  const l = LOCAL.find(x => x.name === skill); if(!l || l.group === group) return;
+  l.group = group; saveLocal(); rebuildSkills(); renderLib(); toast("Moved to " + group);
+}
+const stepUses = (st, name) => st.skill === name || (st.skills || []).includes(name);
+function usageOf(name){
+  const flows = Object.entries(store("wfb.flows") || {}).filter(([, f]) => (f.steps || []).some(st => stepUses(st, name))).map(([k]) => k);
+  return {inFlow: state.steps.some(st => stepUses(st, name)), flows};
+}
+function removeSkill(name){
+  LOCAL = LOCAL.filter(l => l.name !== name); confirmRemove = null;
+  saveLocal(); rebuildSkills(); render(); toast("Removed from your library");
+}
+function confirmCard(sk){
+  const u = usageOf(sk.name), notes = [];
+  if(u.inFlow) notes.push("It is used in the flow on screen.");
+  if(u.flows.length) notes.push("It is used in " + (u.flows.length === 1 ? "the saved flow " : "the saved flows ") + u.flows.join(", ") + ".");
+  const tail = (u.inFlow || u.flows.length ? "Those steps will say the skill is missing, and nothing else in the flows changes. " : "") + (sk.src ? "You can add it again from GitHub." : "You can add it again from your laptop.");
+  return `<div class="pk confirm" role="alertdialog" aria-label="Confirm removal"><p>Remove &ldquo;${e(sk.label)}&rdquo; from your library?</p>
+    <p>${notes.map(e).join(" ")} ${e(tail)}</p>
+    <div class="btns"><button class="btn" data-removeok="${e(sk.name)}">Remove</button><button class="edit q" data-removecancel>Cancel</button></div></div>`;
+}
+function sectEditHTML(){
+  return `<input class="ta" id="sectname" type="text" maxlength="60" placeholder="Section name" aria-label="Section name" value="${e(sectEdit.value)}" autocomplete="off">
+    <div class="btns"><button class="btn" data-sectok>${sectEdit.mode === "new" ? "Create" : "Save"}</button><button class="edit q" data-sectcancel>Cancel</button></div>
+    ${sectEdit.err ? `<p class="ghmsg err" role="alert">${e(sectEdit.err)}</p>` : ""}`;
+}
+function cancelEdits(){
+  if(!(sectEdit || sectConfirm || confirmRemove || confirmForget)) return false;
+  sectEdit = null; sectConfirm = null; confirmRemove = null; confirmForget = false; renderLib(); return true;
 }
 
 /* ---------- skills from a public GitHub repo ---------- */
@@ -758,8 +855,8 @@ async function addFromGithub(){
     const res = await readGithub(ghUrl);
     const shared = new Set(SHARED.map(s => s.name));
     const fresh = res.found.filter(f => !shared.has(f.name));
-    const names = new Set(fresh.map(f => f.name)), labels = Object.fromEntries(LOCAL.map(l => [l.name, l.label]));
-    LOCAL = LOCAL.filter(l => !names.has(l.name)).concat(fresh.map(f => ({...f, label: labels[f.name] || f.label})));
+    const names = new Set(fresh.map(f => f.name)), prev = Object.fromEntries(LOCAL.map(l => [l.name, l]));
+    LOCAL = LOCAL.filter(l => !names.has(l.name)).concat(fresh.map(f => ({...f, label: prev[f.name]?.label || f.label, group: prev[f.name]?.group || f.group})));
     saveLocal(); rebuildSkills();
     const notes = [];
     if(res.found.length - fresh.length) notes.push((res.found.length - fresh.length) + " already in the shared library");
@@ -809,11 +906,13 @@ $("#file").addEventListener("change", async ev => {
   ev.target.value = "";
 });
 $("#search").addEventListener("input", ev => { search = ev.target.value; renderLib(); });
-document.addEventListener("input", ev => { if(ev.target.id === "ghurl") ghUrl = ev.target.value; });
+document.addEventListener("input", ev => { if(ev.target.id === "ghurl") ghUrl = ev.target.value; if(ev.target.id === "sectname" && sectEdit){ sectEdit.value = ev.target.value; sectEdit.err = ""; } });
 document.addEventListener("keydown", ev => {
   if(ev.key === "Escape" && openMenu !== null){ openMenu = null; render(); return; }
   if(ev.target.id === "ghurl" && ev.key === "Enter"){ ev.preventDefault(); addFromGithub(); return; }
-  const sl = ev.target.closest?.("[data-srcurl]");
+  if(ev.target.id === "sectname" && ev.key === "Enter"){ ev.preventDefault(); submitSection(); return; }
+  if(ev.key === "Escape" && cancelEdits()) return;
+  const sl = ev.target.closest?.("[data-srcurl],[data-removeskill],[data-sectrename],[data-sectdelete]");
   if(sl && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); sl.click(); return; }
   const r = ev.target.closest?.("[data-rename]");
   if(r && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); renaming = r.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
@@ -826,13 +925,25 @@ document.addEventListener("focusout", ev => { const inp = ev.target.closest?.("[
 document.addEventListener("click", ev => {
   const t = ev.target;
   const su = t.closest("[data-srcurl]"); if(su){ ev.stopPropagation(); if(su.dataset.srcurl.startsWith("https://github.com/")) window.open(su.dataset.srcurl, "_blank", "noopener"); return; }
+  const rs = t.closest("[data-removeskill]"); if(rs){ ev.stopPropagation(); confirmRemove = rs.dataset.removeskill; renderLib(); return; }
+  const ro = t.closest("[data-removeok]"); if(ro){ removeSkill(ro.dataset.removeok); return; }
+  if(t.closest("[data-removecancel]")){ confirmRemove = null; renderLib(); return; }
+  if(t.closest("[data-sectok]")){ submitSection(); return; }
+  if(t.closest("[data-sectcancel]")){ sectEdit = null; sectConfirm = null; renderLib(); return; }
+  const sr = t.closest("[data-sectrename]"); if(sr){ sectEdit = {mode:"rename", from:sr.dataset.sectrename, value:sr.dataset.sectrename, err:""}; renderLib(); document.querySelector("#sectname")?.select(); return; }
+  const sd = t.closest("[data-sectdelete]"); if(sd){ const g = sd.dataset.sectdelete; if(SKILLS.some(x => x.group === g && x.mine)) { sectConfirm = g; renderLib(); } else deleteSection(g); return; }
+  const sdo = t.closest("[data-sectdeleteok]"); if(sdo){ deleteSection(sdo.dataset.sectdeleteok); return; }
+  const ns = t.closest("button[data-newsect]"); if(ns){ sectEdit = {mode:"new", skill:null, value:"", err:""}; renderLib(); document.querySelector("#sectname")?.focus(); return; }
+  if(t.closest("[data-newsect]")) return;
   const rn = t.closest("[data-rename]"); if(rn){ renaming = rn.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
   if(t.closest("[data-renameinput]")) return;
   const sk = t.closest("[data-skill]"); if(sk){ addSkill(sk.dataset.skill); return; }
   if(t.closest("[data-cancel]")){ pendingInsert = null; pendingGroup = null; renderLib(); return; }
   if(t.closest("#btn-local")){ $("#localfolder").click(); return; }
   if(t.closest("#btn-gh")){ addFromGithub(); return; }
-  if(t.closest("#btn-forget")){ LOCAL = []; saveLocal(); rebuildSkills(); render(); return; }
+  if(t.closest("#btn-forget")){ confirmForget = true; renderLib(); return; }
+  if(t.closest("[data-forgetok]")){ LOCAL = []; confirmForget = false; saveLocal(); rebuildSkills(); render(); return; }
+  if(t.closest("[data-forgetcancel]")){ confirmForget = false; renderLib(); return; }
   const g = t.closest("[data-go]"); if(g){ const n = +g.dataset.go; if(n === 1 || reached2) go(n); return; }
   const op = t.closest("[data-open]"); if(op){ const f = (store("wfb.flows") || {})[op.dataset.open]; if(f) loadFlow(f); return; }
   const df = t.closest("[data-delflow]"); if(df){ const all = store("wfb.flows") || {}; delete all[df.dataset.delflow]; store("wfb.flows", all); render(); return; }
@@ -894,10 +1005,19 @@ document.addEventListener("dragover", ev => {
   if(!dragData) return;
   const slot = ev.target.closest("[data-slot]"), grp = ev.target.closest("[data-group]");
   document.querySelectorAll(".over").forEach(n => n.classList.remove("over"));
+  const sect = ev.target.closest("[data-sect],[data-newsect]");
+  if(sect && dragData.kind === "lib" && BY[dragData.skill]?.mine){ ev.preventDefault(); sect.classList.add("over"); return; }
   if(slot || (grp && dragData.kind === "lib")){ ev.preventDefault(); (slot || grp).classList.add("over"); }
 });
 document.addEventListener("drop", ev => {
   if(!dragData) return;
+  const sect = ev.target.closest("[data-sect],[data-newsect]");
+  if(sect && dragData.kind === "lib" && BY[dragData.skill]?.mine){
+    ev.preventDefault(); const skill = dragData.skill; dragData = null;
+    if(sect.hasAttribute("data-newsect")){ sectEdit = {mode:"new", skill, value:"", err:""}; renderLib(); document.querySelector("#sectname")?.focus(); }
+    else moveToSection(skill, sect.dataset.sect);
+    return;
+  }
   const slot = ev.target.closest("[data-slot]"), grp = ev.target.closest("[data-group]");
   if(slot){
     const i = +slot.dataset.slot;
