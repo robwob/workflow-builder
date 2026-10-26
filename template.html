@@ -128,6 +128,12 @@ h1{font-size:clamp(34px,5vw,56px);font-weight:500;letter-spacing:-.04em;line-hei
 .pk .w{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-top:6px}
 .tag{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);background:var(--accent-wash);border-radius:6px;padding:2px 7px;margin-left:8px;vertical-align:2px}
 .mine-box{background:var(--panel);border-radius:12px;margin-top:36px;padding:14px}
+.mine-box+.mine-box{margin-top:12px}
+.ghrow{display:flex;gap:8px;margin-top:12px}
+.ghrow .search{margin-top:0;flex:1;min-width:0}
+.ghmsg{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:var(--faint)}
+.ghmsg.err{color:var(--ink)}
+.srclink{background:none;border:0;padding:0;margin-top:8px;margin-right:12px;color:var(--faint);font-size:11.5px;text-decoration:underline;text-underline-offset:3px;font-family:"Geist Mono",monospace;display:inline-block;cursor:pointer}
 .rename{background:none;border:0;padding:0;margin-top:8px;color:var(--faint);font-size:11.5px;text-decoration:underline;text-underline-offset:3px;font-family:"Geist Mono",monospace;display:inline-block}
 
 /* canvas */
@@ -335,7 +341,7 @@ function rowHTML(s, i, last){
   if(s.type === "skill"){
     const k = BY[s.skill];
     body = `<span class="lab">${TYPE_LABEL.skill}</span><h3 class="tn">${e(skillLabel(s.skill))}</h3>
-      <p class="tbody">${e(k ? k.gives : "This skill is not in your library.")}</p>
+      <p class="tbody">${e(k ? (k.gives || k.blurb || "") : "This skill is not in your library.")}</p>
       ${!k || !k.installed ? `<div class="warnline">This skill is not in the shared set or in your skills, so the flow will stall here.</div>` : ""}
       <textarea class="ta" rows="1" data-field="note" placeholder="Why is this step here? (optional)">${e(s.note)}</textarea>`;
   } else if(s.type === "approval"){
@@ -402,7 +408,7 @@ function renderLib(){
   const q = search.trim().toLowerCase();
   const groups = {};
   SKILLS.forEach(s => {
-    if(q && !(s.label + " " + s.name + " " + s.gives).toLowerCase().includes(q)) return;
+    if(q && !(s.label + " " + s.name + " " + (s.gives || s.blurb || "")).toLowerCase().includes(q)) return;
     (groups[s.group] = groups[s.group] || []).push(s);
   });
   const order = Object.keys(groups).sort((a, b) => (b === "My skills") - (a === "My skills"));
@@ -415,16 +421,19 @@ function renderLib(){
       }
       html += `<button class="pk" draggable="true" data-skill="${e(s.name)}">
         <span class="add">+ Add</span>
-        <div class="pn2">${e(s.label)}${s.mine ? '<span class="tag">Mine</span>' : ""}</div>
-        <div class="g">${e(s.gives)}</div>${s.when ? `<div class="w">${e(s.when)}</div>` : ""}
-        ${s.mine ? `<span class="rename" role="button" tabindex="0" data-rename="${e(s.name)}">Rename</span>` : ""}</button>`;
+        <div class="pn2">${e(s.label)}${s.src ? '<span class="tag">GitHub</span>' : s.mine ? '<span class="tag">Mine</span>' : ""}</div>
+        <div class="g">${e(s.gives || s.blurb)}</div>${s.when ? `<div class="w">${e(s.when)}</div>` : ""}
+        ${s.src ? `<span class="srclink" role="link" tabindex="0" data-srcurl="${e(s.srcUrl)}">${e(s.src)}</span>` : ""}${s.mine ? `<span class="rename" role="button" tabindex="0" data-rename="${e(s.name)}">Rename</span>` : ""}</button>`;
     });
     html += `</div>`;
   }
   if(!html) html = `<p class="hint">No skills match.</p>`;
   html += `<div class="mine-box"><span class="lab">Skills on your laptop</span>
     <div class="btns"><button class="btn" id="btn-local">Add skills from my laptop</button>${LOCAL.length ? `<button class="edit q" id="btn-forget">Forget mine</button>` : ""}</div>
-    <p class="hint">Choose your skills folder. In the dialog press Cmd+Shift+G and type <code>~/.agents/skills</code>. Nothing is uploaded: the page only reads names and descriptions.</p></div>`;
+    <p class="hint">Choose your skills folder. In the dialog press Cmd+Shift+G and type <code>~/.agents/skills</code>. Nothing is uploaded: the page only reads names and descriptions.</p></div>
+    <div class="mine-box"><span class="lab">Skills on GitHub</span>
+    <div class="ghrow"><input class="search" id="ghurl" type="url" placeholder="github.com/owner/repo" aria-label="GitHub repository address" value="${e(ghUrl)}" autocomplete="off" spellcheck="false"><button class="btn" id="btn-gh"${ghBusy ? " disabled" : ""}>${ghBusy ? "Looking..." : "Add"}</button></div>
+    <p class="ghmsg${ghErr ? " err" : ""}" id="ghmsg" role="status">${ghMsg ? e(ghMsg) : "Any public repo, or a folder or SKILL.md inside one. Only names and descriptions are read. Adding a skill here does not install it: it must also be installed where the flow runs."}</p></div>`;
   const list = $("#plist"), top = list.scrollTop;
   list.innerHTML = html; list.scrollTop = top;
   $("#pbanner").innerHTML = pendingGroup ? `<span>Adding to a group that runs together</span><button class="edit q" data-cancel>Cancel</button>`
@@ -522,7 +531,7 @@ $("#localfolder").addEventListener("change", async ev => {
   const found = await readFolder([...ev.target.files]); ev.target.value = "";
   if(!found.length){ toast("No skills found. Choose the skills folder itself"); return; }
   const labels = Object.fromEntries(LOCAL.map(l => [l.name, l.label]));
-  LOCAL = found.map(f => ({...f, label: labels[f.name] || f.label}));
+  LOCAL = found.map(f => ({...f, label: labels[f.name] || f.label})).concat(LOCAL.filter(l => l.src && !found.some(f => f.name === l.name)));
   saveLocal(); rebuildSkills(); render(); toast(found.length + " skills added from your laptop");
 });
 (function(){ const saved = store("wfb.local"); if(Array.isArray(saved)){ LOCAL = saved; rebuildSkills(); } })();
@@ -530,6 +539,85 @@ function finishRename(input){
   const n = input.dataset.renameinput, v = input.value.trim(), l = LOCAL.find(x => x.name === n);
   if(l && v) l.label = v;
   renaming = null; saveLocal(); rebuildSkills(); render();
+}
+
+/* ---------- skills from a public GitHub repo ---------- */
+let ghUrl = "", ghMsg = "", ghErr = false, ghBusy = false;
+const GH_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const GH_MAX = 60;
+function parseGh(raw){
+  const m = raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").match(/^github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?(?:\/(tree|blob)\/([^\/?#]+)(?:\/([^?#]*))?)?\/?(?:[?#].*)?$/i);
+  if(!m) return null;
+  return {owner: m[1], repo: m[2], kind: m[3] || "", ref: m[4] ? decodeURIComponent(m[4]) : "", path: (m[5] || "").replace(/\/+$/, "")};
+}
+class GhError extends Error {}
+async function ghFetch(url, what){
+  let r;
+  try{ r = await fetch(url, {headers: {Accept: "application/vnd.github+json"}}); }catch(_){ throw new GhError("Could not reach GitHub. Check your connection and try again."); }
+  if(r.status === 404) throw new GhError(what === "repo" ? "Not found. The address may be wrong, or the repo is private (only public repos work)." : "That file could not be read.");
+  if(r.status === 403 || r.status === 429){
+    const at = +r.headers.get("x-ratelimit-reset");
+    throw new GhError("GitHub's limit for this browser is used up." + (at ? " Try again after " + new Date(at * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + "." : " Try again later."));
+  }
+  if(!r.ok) throw new GhError("GitHub answered with an error (" + r.status + ").");
+  return r;
+}
+const encPath = p => p.split("/").map(encodeURIComponent).join("/");
+async function readGithub(raw){
+  const g = parseGh(raw);
+  if(!g) throw new GhError("That does not look like a GitHub address. Try github.com/owner/repo.");
+  const ref = g.ref || "HEAD", repoName = g.owner + "/" + g.repo;
+  let paths, truncated = false;
+  if(g.kind === "blob"){
+    if(!/(^|\/)SKILL\.md$/.test(g.path)) throw new GhError("That link is not a SKILL.md file.");
+    paths = [g.path];
+  } else {
+    const tree = await (await ghFetch("https://api.github.com/repos/" + g.owner + "/" + g.repo + "/git/trees/" + encodeURIComponent(ref) + "?recursive=1", "repo")).json();
+    truncated = !!tree.truncated;
+    const prefix = g.path ? g.path + "/" : "";
+    paths = (tree.tree || []).filter(t => t.type === "blob" && /(^|\/)SKILL\.md$/.test(t.path) && t.path.startsWith(prefix)).map(t => t.path);
+  }
+  if(!paths.length) throw new GhError(g.path ? "No SKILL.md found in that folder." : "No SKILL.md files found in that repo." + (truncated ? " The repo is too large for GitHub to list in full." : ""));
+  const over = paths.length > GH_MAX; paths = paths.slice(0, GH_MAX);
+  const found = [], skipped = [];
+  for(let i = 0; i < paths.length; i += 6){
+    await Promise.all(paths.slice(i, i + 6).map(async path => {
+      try{
+        const r = await fetch("https://raw.githubusercontent.com/" + g.owner + "/" + g.repo + "/" + encodeURIComponent(ref) + "/" + encPath(path));
+        if(!r.ok) throw 0;
+        const fm = parseFront(await r.text());
+        const dir = path.split("/").slice(-2, -1)[0] || g.repo;
+        const name = GH_NAME.test(fm.name || "") ? fm.name : dir;
+        if(!GH_NAME.test(name)){ skipped.push(path); return; }
+        const first = (fm.description || "").split(/(?<=[.!?])\s/)[0] || "";
+        found.push({name, label: name, gives: "", blurb: first.length > 110 ? first.slice(0, 109).trimEnd() + "..." : first, when: "", group: "My skills", mine: true, installed: true,
+          src: repoName, srcUrl: "https://github.com/" + repoName + "/blob/" + encodeURIComponent(ref) + "/" + encPath(path)});
+      }catch(_){ skipped.push(path); }
+    }));
+  }
+  return {found, skipped: skipped.length, over, truncated, total: paths.length};
+}
+async function addFromGithub(){
+  if(ghBusy) return;
+  ghUrl = ($("#ghurl")?.value ?? ghUrl); ghErr = false; ghBusy = true; ghMsg = "Looking at GitHub..."; renderLib();
+  try{
+    const res = await readGithub(ghUrl);
+    const shared = new Set(SHARED.map(s => s.name));
+    const fresh = res.found.filter(f => !shared.has(f.name));
+    const names = new Set(fresh.map(f => f.name)), labels = Object.fromEntries(LOCAL.map(l => [l.name, l.label]));
+    LOCAL = LOCAL.filter(l => !names.has(l.name)).concat(fresh.map(f => ({...f, label: labels[f.name] || f.label})));
+    saveLocal(); rebuildSkills();
+    const notes = [];
+    if(res.found.length - fresh.length) notes.push((res.found.length - fresh.length) + " already in the shared library");
+    if(res.skipped) notes.push(res.skipped + " could not be read");
+    if(res.over) notes.push("only the first " + GH_MAX + " were read");
+    if(res.truncated) notes.push("the repo is large, so GitHub's list may be incomplete");
+    ghMsg = fresh.length ? fresh.length + " added to My skills." + (notes.length ? " " + notes.join("; ") + "." : "") : "Nothing new to add." + (notes.length ? " " + notes.join("; ") + "." : "");
+    ghUrl = fresh.length ? "" : ghUrl;
+  }catch(err){
+    ghErr = true; ghMsg = err instanceof GhError ? err.message : "Something went wrong reading that repo.";
+  }
+  ghBusy = false; render();
 }
 
 /* ---------- theme: same behaviour as Themes and Levers ---------- */
@@ -567,8 +655,12 @@ $("#file").addEventListener("change", async ev => {
   ev.target.value = "";
 });
 $("#search").addEventListener("input", ev => { search = ev.target.value; renderLib(); });
+document.addEventListener("input", ev => { if(ev.target.id === "ghurl") ghUrl = ev.target.value; });
 document.addEventListener("keydown", ev => {
   if(ev.key === "Escape" && openMenu !== null){ openMenu = null; render(); return; }
+  if(ev.target.id === "ghurl" && ev.key === "Enter"){ ev.preventDefault(); addFromGithub(); return; }
+  const sl = ev.target.closest?.("[data-srcurl]");
+  if(sl && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); sl.click(); return; }
   const r = ev.target.closest?.("[data-rename]");
   if(r && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); renaming = r.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
   const inp = ev.target.closest?.("[data-renameinput]");
@@ -579,11 +671,13 @@ document.addEventListener("focusout", ev => { const inp = ev.target.closest?.("[
 
 document.addEventListener("click", ev => {
   const t = ev.target;
+  const su = t.closest("[data-srcurl]"); if(su){ ev.stopPropagation(); if(su.dataset.srcurl.startsWith("https://github.com/")) window.open(su.dataset.srcurl, "_blank", "noopener"); return; }
   const rn = t.closest("[data-rename]"); if(rn){ renaming = rn.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
   if(t.closest("[data-renameinput]")) return;
   const sk = t.closest("[data-skill]"); if(sk){ addSkill(sk.dataset.skill); return; }
   if(t.closest("[data-cancel]")){ pendingInsert = null; pendingGroup = null; renderLib(); return; }
   if(t.closest("#btn-local")){ $("#localfolder").click(); return; }
+  if(t.closest("#btn-gh")){ addFromGithub(); return; }
   if(t.closest("#btn-forget")){ LOCAL = []; saveLocal(); rebuildSkills(); render(); return; }
   const g = t.closest("[data-go]"); if(g){ const n = +g.dataset.go; if(n === 1 || reached2) go(n); return; }
   const op = t.closest("[data-open]"); if(op){ const f = (store("wfb.flows") || {})[op.dataset.open]; if(f) loadFlow(f); return; }

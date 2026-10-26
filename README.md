@@ -16,7 +16,9 @@ no install and no server.
 
 Saved flows live in your browser's localStorage and are not uploaded anywhere.
 "My skills" reads names and descriptions from a folder you pick, and nothing leaves
-your machine.
+your machine. You can also paste any public GitHub repo address (or a folder or
+`SKILL.md` inside one) under "Skills on GitHub". The page reads names and descriptions
+only. Adding a skill does not install it: it must also be installed where the flow runs.
 
 ## Caveats
 
@@ -27,6 +29,9 @@ your machine.
   that a pause holds.
 - The library lists design skills that you need installed separately. A flow that
   names a skill you do not have will not run that step.
+
+GitHub limits unauthenticated requests to 60 an hour per network address. Each repo
+added costs one of them.
 
 ## Rebuild
 
