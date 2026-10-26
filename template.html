@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow builder</title>
+<script>try{var t=localStorage.getItem("wfb-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Modern pass: cool greys tinted toward the mint, cards with moderate radii and a
+   soft lift, one accent. Supersedes the Themes and Levers rule of radii 0 or 999 and no cards.
+   --accent fills, --accent-text writes. Contrast, measured: ink on --accent 9.22:1 (light);
+   --accent-text 6.59:1 on a card and 6.02:1 on the page grey; --faint 5.29:1 on the page grey;
+   --edge (interactive borders) 3.18:1 on the page grey. Dark: --accent-text 8.60:1 on a card,
+   --faint 6.44:1, --edge 3.02:1. */
+:root{
+  --bg:#F3F5F5; --surface:#FFFFFF; --panel:#EAEEEE; --ink:#0B1414;
+  --muted:#425050; --faint:#5B6868;
+  --line:#E0E6E6; --edge:#7F8C8C;
+  --accent:#00CCBC; --accent-text:#00695F; --accent-ink:#0B1414; --accent-wash:#E2F6F3;
+  --shadow:0 1px 2px rgba(11,20,20,.05),0 6px 18px rgba(11,20,20,.05);
+  --shadow-up:0 2px 4px rgba(11,20,20,.06),0 10px 24px rgba(11,20,20,.09);
+  --r-card:14px; --r-ctl:10px; --r-in:8px;
+  --pad:40px; --headerh:60px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C1011; --surface:#151B1C; --panel:#1C2324; --ink:#F2F6F6;
+  --muted:#C3CECE; --faint:#92A0A0;
+  --line:#262E2F; --edge:#5C6868;
+  --accent:#00CCBC; --accent-text:#00CCBC; --accent-ink:#0C1011; --accent-wash:#0F2B29;
+  --shadow:none; --shadow-up:0 8px 24px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  --bg:#0C1011; --surface:#151B1C; --panel:#1C2324; --ink:#F2F6F6;
+  --muted:#C3CECE; --faint:#92A0A0;
+  --line:#262E2F; --edge:#5C6868;
+  --accent:#00CCBC; --accent-text:#00CCBC; --accent-ink:#0C1011; --accent-wash:#0F2B29;
+  --shadow:none; --shadow-up:0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:Geist,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.mono,.lab,.act,.btn,.sg,.edit{font-family:"Geist Mono",ui-monospace,Menlo,monospace}
+.lab{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:400}
+.wrap{max-width:1320px;margin:0 auto;padding:0 var(--pad)}
+@media(max-width:640px){:root{--pad:22px}}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+[hidden]{display:none!important}
+
+header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:30}
+header .wrap{display:flex;align-items:center;gap:24px;min-height:var(--headerh)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:500;font-size:15px;letter-spacing:-.01em}
+.mark{width:22px;height:22px;border-radius:7px;background:var(--accent);flex:none}
+header nav{margin-left:auto;display:flex;gap:22px;align-items:center}
+.link{background:none;border:0;padding:0;font-size:13.5px;color:var(--muted)}
+.link:hover{color:var(--ink)}
+
+/* theme toggle, as on Themes and Levers: one icon at a time, the light comes out of the switch */
+.tt{flex:none;width:34px;height:34px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--bg);color:var(--muted);padding:0;display:flex;align-items:center;justify-content:center;transition:color .15s,border-color .15s}
+.tt:hover{color:var(--ink);border-color:var(--edge)}
+.tt svg{width:15px;height:15px;display:block}
+.tt .i-sun{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tt .i-sun{display:block}
+  :root:not([data-theme="light"]) .tt .i-moon{display:none}}
+:root[data-theme="dark"] .tt .i-sun{display:block}
+:root[data-theme="dark"] .tt .i-moon{display:none}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+:root.vt-on::view-transition-old(root){z-index:1}
+:root.vt-on::view-transition-new(root){z-index:2;animation:lightOn 750ms cubic-bezier(.2,.6,.2,1) forwards}
+:root.vt-off::view-transition-new(root){z-index:1}
+:root.vt-off::view-transition-old(root){z-index:2;animation:lightOff 650ms cubic-bezier(.4,0,.3,1) forwards}
+@keyframes lightOn{from{clip-path:circle(0 at var(--sx) var(--sy))}to{clip-path:circle(var(--sr) at var(--sx) var(--sy))}}
+@keyframes lightOff{from{clip-path:circle(var(--sr) at var(--sx) var(--sy))}to{clip-path:circle(0 at var(--sx) var(--sy))}}
+.tt svg{view-transition-name:themeicon}
+::view-transition-old(themeicon){animation:iconOut 450ms cubic-bezier(.4,0,.2,1) both}
+::view-transition-new(themeicon){animation:iconIn 450ms cubic-bezier(.4,0,.2,1) both}
+@keyframes iconOut{to{opacity:0;transform:rotate(-100deg) scale(.5)}}
+@keyframes iconIn{from{opacity:0;transform:rotate(100deg) scale(.5)}}
+
+main{padding:36px 0 80px}
+@media(max-width:820px){main{padding:24px 0 60px}}
+.grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:48px;align-items:start}
+.grid.take{grid-template-columns:minmax(0,1fr)}
+@media(max-width:1100px){.grid{grid-template-columns:272px minmax(0,1fr);gap:32px}}
+@media(max-width:820px){.grid,.grid.take{grid-template-columns:1fr;gap:18px}}
+
+h1{font-size:clamp(34px,5vw,56px);font-weight:500;letter-spacing:-.04em;line-height:1;margin:0;max-width:17ch}
+.sub{margin:20px 0 0;font-size:16.5px;color:var(--muted);max-width:56ch;line-height:1.5;letter-spacing:-.01em}
+
+/* buttons */
+.act{font-size:12.5px;font-weight:500;padding:13px 22px;border-radius:var(--r-ctl);border:0;background:var(--accent);color:var(--accent-ink);transition:opacity .15s,transform .15s}
+.act:hover{opacity:.9}
+.act:active{transform:translateY(1px)}
+.act[disabled]{opacity:.35;cursor:not-allowed}
+.btn{font-size:12px;padding:9px 15px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--surface);color:var(--muted);transition:all .15s}
+.btn:hover{border-color:var(--edge);color:var(--ink)}
+.edit{background:none;border:0;color:var(--accent-text);font-size:11.5px;padding:0;text-decoration:underline;text-underline-offset:3px}
+.edit.q{color:var(--faint)}
+.edit.q:hover{color:var(--ink)}
+
+/* library: always on screen while building; every skill is a card */
+.lib{position:sticky;top:calc(var(--headerh) + 18px);max-height:calc(100vh - var(--headerh) - 36px);display:flex;flex-direction:column}
+@media(max-width:820px){.lib{position:static;max-height:440px}}
+.lib h2{margin:0;font-size:18px;font-weight:500;letter-spacing:-.02em}
+.lib .hd{flex:none}
+.search{width:100%;margin-top:12px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface);padding:9px 13px;font-size:14px;outline:none;transition:border-color .15s}
+.search:focus{border-color:var(--accent-text)}
+.search::placeholder{color:var(--faint)}
+.pbanner{margin-top:10px;font-size:13.5px;color:var(--accent-text);display:flex;justify-content:space-between;gap:8px;background:var(--accent-wash);border-radius:var(--r-in);padding:8px 12px}
+.pbanner:empty{display:none}
+.pbody{overflow:auto;flex:1;min-height:0;margin-top:2px;padding:2px 6px 8px 2px;margin-right:-6px}
+.pg{margin-top:40px}
+.pg:first-child{margin-top:24px}
+.pgt{display:flex;align-items:baseline;gap:8px;margin:0 0 12px;padding-bottom:10px;border-bottom:2px solid var(--ink);font-size:17px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.pgt .ct{font-family:"Geist Mono",monospace;font-size:11px;font-weight:400;letter-spacing:.04em;color:var(--faint)}
+.pk{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px;position:relative;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s,transform .15s}
+.pk[draggable=true]{cursor:grab}
+.pk:hover{border-color:var(--accent);box-shadow:var(--shadow-up);transform:translateY(-1px)}
+.pn2{font-size:14.5px;font-weight:500;letter-spacing:-.015em;padding-right:46px;line-height:1.35}
+.pk .add{position:absolute;right:12px;top:12px;font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text)}
+.pk .g{font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:2px}
+.pk .w{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-top:6px}
+.tag{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);background:var(--accent-wash);border-radius:6px;padding:2px 7px;margin-left:8px;vertical-align:2px}
+.mine-box{background:var(--panel);border-radius:12px;margin-top:36px;padding:14px}
+.rename{background:none;border:0;padding:0;margin-top:8px;color:var(--faint);font-size:11.5px;text-decoration:underline;text-underline-offset:3px;font-family:"Geist Mono",monospace;display:inline-block}
+
+/* canvas */
+.nameinput{width:100%;max-width:22ch;display:block;font-family:inherit;font-size:clamp(28px,3.4vw,40px);font-weight:500;letter-spacing:-.035em;background:transparent;border:0;border-bottom:2px solid var(--line);border-radius:0;padding:0 0 8px;outline:none;line-height:1.2;margin-top:8px;transition:border-color .18s}
+.nameinput:focus{border-bottom-color:var(--accent)}
+.nameinput::placeholder{color:var(--faint)}
+.or{margin:32px 0 10px;display:block}
+.emptycard{margin-top:28px;border:2px dashed var(--edge);border-radius:var(--r-card);padding:28px 24px;min-height:170px;display:flex;flex-direction:column;justify-content:center;gap:8px;transition:border-color .15s,background .15s}
+.emptycard p{margin:0;font-size:16px;color:var(--muted);max-width:44ch;line-height:1.5}
+.emptycard.over{border-color:var(--accent);background:var(--accent-wash)}
+.saved{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:8px;gap:12px;box-shadow:var(--shadow)}
+.saved .nm{font-size:15.5px;font-weight:500;letter-spacing:-.015em;background:none;border:0;padding:0;text-align:left}
+.saved .nm:hover{color:var(--accent-text)}
+.flow{margin-top:32px}
+.slot{position:relative;height:60px}
+.slot::before{content:"";position:absolute;left:34px;top:0;bottom:0;width:2px;background:var(--line)}
+.slot .plus{position:absolute;left:21px;top:16px;z-index:1;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--faint);font-size:16px;line-height:1;padding:0;opacity:.85;transition:all .15s}
+.slot .plus:hover,.slot.over .plus{border-color:var(--accent);color:var(--accent-text);opacity:1}
+.slot.over::before{background:var(--accent)}
+.menu{position:absolute;z-index:20;left:60px;top:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-up);display:flex;flex-direction:column;min-width:270px;padding:6px}
+.menu button{border:0;background:none;text-align:left;padding:10px 12px;font-size:14.5px;font-weight:500;border-radius:8px}
+.menu button:hover{background:var(--panel)}
+.menu small{display:block;font-size:13px;line-height:18px;color:var(--muted);font-weight:300}
+.row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:0 14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:22px 24px;align-items:start;box-shadow:var(--shadow)}
+.row.gate{background:var(--accent-wash);border-color:var(--accent)}
+.row.dragging{opacity:.4}
+.rn{width:30px;height:30px;border-radius:8px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.04em;color:var(--muted)}
+.row.gate .rn{background:var(--accent);color:var(--accent-ink)}
+.row.gate .lab{color:var(--accent-text)}
+.tn{font-size:18px;font-weight:500;letter-spacing:-.02em;margin:3px 0 0}
+.tbody{margin:5px 0 0;font-size:14.5px;color:var(--muted);line-height:1.45;max-width:62ch}
+.rc{display:flex;gap:14px;align-items:center;padding-top:6px}
+.handle{cursor:grab}
+.ta{width:100%;display:block;margin-top:12px;border:1px solid transparent;background:var(--panel);border-radius:var(--r-in);padding:9px 12px;font-size:14.5px;line-height:1.45;resize:vertical;outline:none;color:var(--ink);transition:border-color .15s}
+.row.gate .ta{background:var(--surface)}
+.ta:focus{border-color:var(--accent-text)}
+.ta::placeholder{color:var(--faint)}
+.warnline{font-size:13.5px;color:var(--muted);margin-top:8px;background:var(--accent-wash);border-radius:var(--r-in);padding:8px 12px}
+.chips{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border-radius:8px;background:var(--panel);font-size:14px;font-weight:500}
+.chip button{border:0;background:none;color:var(--faint);padding:0 4px;font-size:15px;line-height:1}
+.chip button:hover{color:var(--ink)}
+.dropnote{margin-top:12px;font-size:14px;color:var(--faint);padding:14px;border:1px dashed var(--edge);border-radius:var(--r-in)}
+[data-group].over .dropnote,[data-group].over .chips{outline:2px dashed var(--accent);outline-offset:4px;border-radius:var(--r-in)}
+.end{margin:28px 0 0;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.finish{margin-top:56px;padding:28px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow)}
+.finish p{margin:0 0 16px;color:var(--muted);font-size:15px;max-width:56ch}
+
+/* take it away */
+.take-body{max-width:780px}
+.grp{margin-top:32px}
+.grp .lab{display:block;margin-bottom:10px}
+.seg{display:inline-flex;gap:4px;background:var(--panel);border-radius:12px;padding:4px;max-width:100%;flex-wrap:wrap}
+.sg{font-size:11.5px;padding:8px 14px;background:transparent;border:0;border-radius:8px;color:var(--muted);white-space:nowrap;transition:all .15s}
+.sg:hover{color:var(--ink)}
+.sg.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+pre#out{margin:16px 0 0;border:1px solid var(--line);background:var(--surface);padding:20px;border-radius:var(--r-card);box-shadow:var(--shadow);font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.7;font-weight:400;white-space:pre-wrap;word-break:break-word;max-height:48vh;overflow:auto}
+.hint{font-size:14px;line-height:1.5;color:var(--muted);margin:14px 0 0;max-width:62ch}
+.hint code{font-family:"Geist Mono",monospace;font-size:12.5px;background:var(--panel);border-radius:6px;padding:1px 6px}
+.btns{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:var(--r-ctl);font-size:13px;z-index:80;box-shadow:var(--shadow-up)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="mark"></span>Workflow builder</div>
+    <nav>
+      <button class="link" id="btn-open">Open a file</button>
+      <input type="file" id="file" accept=".md,text/markdown,text/plain" hidden>
+      <button class="tt" id="themetoggle" type="button" aria-label="Switch theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="i-sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.2M12 19.4v2.2M4.4 4.4l1.6 1.6M18 18l1.6 1.6M2.4 12h2.2M19.4 12h2.2M4.4 19.6l1.6-1.6M18 6l1.6-1.6"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="i-moon"><path d="M20.5 14.4A8.5 8.5 0 1 1 9.6 3.5a6.7 6.7 0 0 0 10.9 10.9Z"/></svg></button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid" id="grid">
+      <aside class="lib" id="lib" aria-label="Skills">
+        <div class="hd">
+          <h2>Skills</h2>
+          <input class="search" id="search" type="search" placeholder="Search skills" aria-label="Search skills">
+          <div class="pbanner" id="pbanner"></div>
+        </div>
+        <div class="pbody" id="plist"></div>
+      </aside>
+      <section id="view" aria-live="polite"></section>
+    </div>
+  </div>
+</main>
+<input type="file" id="localfolder" webkitdirectory multiple hidden>
+
+<script>
+const SHARED = /*SKILLS_JSON*/[];
+let LOCAL = [];                 // skills read from this laptop
+let SKILLS = SHARED.slice();
+let BY = {};
+let renaming = null;
+function rebuildSkills(){
+  const shared = new Set(SHARED.map(s => s.name));
+  SKILLS = LOCAL.filter(l => !shared.has(l.name)).concat(SHARED);
+  BY = Object.fromEntries(SKILLS.map(s => [s.name, s]));
+}
+rebuildSkills();
+
+// Example flows. Not shown in the page any more (an empty card is shown instead); kept for reuse.
+const STARTERS = [
+  {name:"Review a design", desc:"Get every angle checked, then decide what to fix.", steps:[
+    {type:"question", text:"Which screen or flow are we reviewing, who is it for, and what should it help them do?"},
+    {type:"together", skills:["ux-review","ui-review","content-review"], note:"Three different eyes on the same design at once, so nothing is missed."},
+    {type:"approval", text:"Read the three reports. Which findings do we act on?"},
+    {type:"skill", skill:"define-levers", note:"Turn the findings you chose into what to change and why it will work."}
+  ]},
+  {name:"Start a new project", desc:"From a rough idea to a styled design, with a check at each stage.", steps:[
+    {type:"skill", skill:"brief", note:"Settle why we are doing this and what done looks like, before any design."},
+    {type:"approval", text:"Is this the right brief and the right plan?"},
+    {type:"skill", skill:"discovery", note:"Explore structure in greyscale so nobody argues about colour yet."},
+    {type:"approval", text:"Is the layout right?"},
+    {type:"skill", skill:"interaction", note:"Cover the states people hit: errors, empty, loading."},
+    {type:"approval", text:"Do the states cover what can go wrong?"},
+    {type:"skill", skill:"ui", note:"Only now apply the visual style."},
+    {type:"approval", text:"Is this ready to show?"}
+  ]},
+  {name:"Run user research", desc:"Plan the research, then write what you need to run it.", steps:[
+    {type:"skill", skill:"ux-research-brief", note:"Decide what you need to learn and which methods fit."},
+    {type:"approval", text:"Is this the right plan and the right methods?"},
+    {type:"together", skills:["discussion-guide","usability-test-plan","survey-questions"], note:"Draft the materials for each method you picked. Delete any you do not need."},
+    {type:"approval", text:"Are these ready to take to participants?"}
+  ]},
+  {name:"Understand why a page works", desc:"Find the strategy behind a design, then pick what to change.", steps:[
+    {type:"skill", skill:"analyse-themes", note:"See the strategic approach before judging the details."},
+    {type:"approval", text:"Do these themes match how you read the page?"},
+    {type:"skill", skill:"define-levers", note:"Choose the few things worth changing and the reason each will work."}
+  ]}
+];
+
+const TYPE_LABEL = {skill:"Run a skill", approval:"Wait for my approval", question:"Ask me a question", together:"Do these together"};
+const DEFAULTS = {
+  approval: () => ({type:"approval", text:"Check the result before moving on."}),
+  question: () => ({type:"question", text:""}),
+  together: () => ({type:"together", skills:[], note:""})
+};
+
+let state = {name:"", tool:"codex", steps:[]};
+let view = 1;               // 1 build, 2 take it away
+let reached2 = false;       // step 2 only appears once the designer says they are happy
+let pendingInsert = null;   // index to insert the next picked skill at
+let pendingGroup = null;    // id of a "together" step the next pick should join
+let openMenu = null;
+let exportTab = "install";
+let search = "";
+let uid = 1;
+
+const $ = s => document.querySelector(s);
+const e = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nid = () => "s" + (uid++);
+const slug = n => (n || "my-workflow").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || "my-workflow";
+const skillLabel = n => BY[n]?.label || n;
+const pad2 = n => String(n).padStart(2, "0");
+const valid = () => state.name.trim() && state.steps.length > 0;
+
+function toast(msg){
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+}
+function store(k, v){ try{ if(v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); }catch(_){ return null; } }
+function withIds(steps){ return steps.map(s => ({id:nid(), ...JSON.parse(JSON.stringify(s))})); }
+function snapshot(){ return {name: state.name, tool: state.tool, steps: state.steps.map(({id, ...r}) => r)}; }
+
+/* ---------- state changes ---------- */
+function go(v){ view = v; openMenu = null; pendingInsert = null; pendingGroup = null; render(); window.scrollTo(0, 0); }
+function loadFlow(f){ state = {name:f.name, tool:f.tool || "codex", steps:withIds(f.steps)}; reached2 = false; go(1); }
+function insertStep(index, step){ state.steps.splice(index, 0, {id:nid(), ...step}); }
+function moveStep(id, to){
+  const from = state.steps.findIndex(s => s.id === id); if(from < 0) return;
+  const [s] = state.steps.splice(from, 1);
+  state.steps.splice(to > from ? to - 1 : to, 0, s);
+}
+function addSkill(name){
+  if(pendingGroup){
+    const g = state.steps.find(s => s.id === pendingGroup);
+    if(g && !g.skills.includes(name)) g.skills.push(name);
+  } else if(pendingInsert !== null){ insertStep(pendingInsert, {type:"skill", skill:name, note:""}); }
+  else insertStep(state.steps.length, {type:"skill", skill:name, note:""});
+  pendingInsert = null; pendingGroup = null; render();
+}
+
+/* ---------- canvas ---------- */
+function slotHTML(i){
+  const menu = openMenu === i ? `<div class="menu" role="menu">
+    <button data-menu="skill">A skill<small>Pick one from the list on the left</small></button>
+    <button data-menu="approval">An approval<small>Stops until you say yes</small></button>
+    <button data-menu="question">A question<small>Asked before carrying on</small></button>
+    <button data-menu="together">Skills at the same time<small>Several run together</small></button></div>` : "";
+  return `<div class="slot" data-slot="${i}"><button class="plus" data-act="menu" aria-label="Add a step here">+</button>${menu}</div>`;
+}
+
+function rowHTML(s, i, last){
+  const ctrl = `<button class="edit q handle" draggable="true" data-handle title="Drag to reorder">Drag</button>
+    <button class="edit q" data-act="up" ${i === 0 ? "disabled style='visibility:hidden'" : ""}>Up</button>
+    <button class="edit q" data-act="down" ${last ? "disabled style='visibility:hidden'" : ""}>Down</button>
+    <button class="edit q" data-act="del">Remove</button>`;
+  let body = "";
+  if(s.type === "skill"){
+    const k = BY[s.skill];
+    body = `<span class="lab">${TYPE_LABEL.skill}</span><h3 class="tn">${e(skillLabel(s.skill))}</h3>
+      <p class="tbody">${e(k ? k.gives : "This skill is not in your library.")}</p>
+      ${!k || !k.installed ? `<div class="warnline">This skill is not in the shared set or in your skills, so the flow will stall here.</div>` : ""}
+      <textarea class="ta" rows="1" data-field="note" placeholder="Why is this step here? (optional)">${e(s.note)}</textarea>`;
+  } else if(s.type === "approval"){
+    body = `<span class="lab">${TYPE_LABEL.approval}</span><h3 class="tn">Nothing carries on until you say yes</h3>
+      <textarea class="ta" rows="1" data-field="text" placeholder="What should you check?">${e(s.text)}</textarea>`;
+  } else if(s.type === "question"){
+    body = `<span class="lab">${TYPE_LABEL.question}</span><h3 class="tn">Your answer is used by the steps after it</h3>
+      <textarea class="ta" rows="1" data-field="text" placeholder="The question, e.g. Who is this design for?">${e(s.text)}</textarea>`;
+  } else if(s.type === "together"){
+    const chips = s.skills.map((n2, j) => `<span class="chip">${e(skillLabel(n2))}<button data-act="rmchip" data-j="${j}" aria-label="Remove ${e(skillLabel(n2))}">&times;</button></span>`).join("");
+    body = `<span class="lab">${TYPE_LABEL.together}</span><h3 class="tn">They work separately, then the results are combined</h3>
+      <div data-group>${s.skills.length ? `<div class="chips">${chips}</div>` : `<div class="dropnote">No skills yet. Click Add a skill, then pick from the list, or drag one here.</div>`}</div>
+      <div class="btns" style="margin-top:12px"><button class="btn" data-act="addtogether">Add a skill</button></div>
+      <textarea class="ta" rows="1" data-field="note" placeholder="Why these together? (optional)">${e(s.note || "")}</textarea>`;
+  }
+  return `<article class="row ${s.type === "approval" ? "gate" : ""} ${last ? "last" : ""}" data-id="${s.id}">
+    <div class="rn">${pad2(i + 1)}</div><div>${body}</div><div class="rc">${ctrl}</div></article>`;
+}
+
+function viewBuild(){
+  const n = state.steps.length;
+  const all = store("wfb.flows") || {};
+  const names = Object.keys(all);
+  let html = `<span class="lab">Your workflow</span>
+    <input id="name1" class="nameinput" type="text" value="${e(state.name)}" placeholder="Name your workflow" autocomplete="off" aria-label="Workflow name">`;
+  if(!n){
+    html += `<div class="emptycard" data-slot="0"><span class="lab">Step 01</span><p>Your flow starts here. Click a skill on the left, or drag one onto this card.</p></div>
+      ${names.length ? `<span class="lab or">Your saved flows</span>${names.map(nm => `<div class="saved"><button class="nm" data-open="${e(nm)}">${e(nm)}</button><button class="edit q" data-delflow="${e(nm)}">Delete</button></div>`).join("")}<div class="endrule"></div>` : ""}`;
+  } else {
+    html += `<div class="flow">`;
+    state.steps.forEach((s, i) => { html += slotHTML(i) + rowHTML(s, i, i === n - 1); });
+    html += slotHTML(n);
+    html += `<div class="end"><button class="btn" data-act="menu" data-end>Add a step</button><span style="flex:1"></span><button class="edit q" data-act="save">Save for later</button><button class="edit q" data-act="clear">Start again</button></div></div>`;
+  }
+  html += `<div class="finish"><p>${n ? "When the order and the stops are right, move on to get it into your tool." : "Add at least one step to continue."}</p>
+    <button class="act" id="happy" data-happy ${valid() ? "" : "disabled"}>I'm happy with this flow</button></div>`;
+  return html;
+}
+
+function viewTake(){
+  const nm = state.name || "My workflow";
+  const toolName = state.tool === "codex" ? "Codex" : "Claude Code";
+  return `<div class="take-body"><h1>${e(nm)} is ready</h1>
+    <p class="sub">${state.steps.length} steps, ${state.steps.filter(s => s.type === "approval").length} of them stops for your approval. Pick how you want to take it with you.</p>
+    <div class="grp"><span class="lab">Where will you run it?</span>
+      <div class="seg" role="group" aria-label="Tool"><button class="sg ${state.tool === "codex" ? "on" : ""}" data-tool="codex">Codex</button><button class="sg ${state.tool === "claude" ? "on" : ""}" data-tool="claude">Claude Code</button></div></div>
+    <div class="grp"><span class="lab">How do you want to use it?</span>
+      <div class="seg" role="tablist"><button class="sg ${exportTab === "install" ? "on" : ""}" role="tab" data-tab="install">Install with ${toolName}</button><button class="sg ${exportTab === "skill" ? "on" : ""}" role="tab" data-tab="skill">Skill file</button><button class="sg ${exportTab === "prompt" ? "on" : ""}" role="tab" data-tab="prompt">Paste into a chat</button></div>
+      <pre id="out" tabindex="0"></pre>
+      <div class="btns"><button class="act" id="btn-copy">Copy</button><button class="btn" id="btn-dl">Download</button><button class="edit q" data-go="1" style="margin-left:8px">Back to the flow</button></div>
+      <p class="hint" id="exphint"></p></div></div>`;
+}
+
+function render(){
+  $("#grid").className = "grid" + (view === 2 ? " take" : "");
+  $("#lib").hidden = view !== 1;
+  $("#view").innerHTML = view === 1 ? viewBuild() : viewTake();
+  if(view === 2) renderExport();
+  renderLib();
+}
+
+/* ---------- library ---------- */
+function renderLib(){
+  const q = search.trim().toLowerCase();
+  const groups = {};
+  SKILLS.forEach(s => {
+    if(q && !(s.label + " " + s.name + " " + s.gives).toLowerCase().includes(q)) return;
+    (groups[s.group] = groups[s.group] || []).push(s);
+  });
+  const order = Object.keys(groups).sort((a, b) => (b === "My skills") - (a === "My skills"));
+  let html = "";
+  for(const g of order){
+    html += `<div class="pg"><h3 class="pgt">${e(g)}<span class="ct">${groups[g].length}</span></h3>`;
+    groups[g].forEach(s => {
+      if(renaming === s.name){
+        html += `<div class="pk"><span class="lab">Name for this skill</span><input class="ta" data-renameinput="${e(s.name)}" value="${e(s.label)}"></div>`; return;
+      }
+      html += `<button class="pk" draggable="true" data-skill="${e(s.name)}">
+        <span class="add">+ Add</span>
+        <div class="pn2">${e(s.label)}${s.mine ? '<span class="tag">Mine</span>' : ""}</div>
+        <div class="g">${e(s.gives)}</div>${s.when ? `<div class="w">${e(s.when)}</div>` : ""}
+        ${s.mine ? `<span class="rename" role="button" tabindex="0" data-rename="${e(s.name)}">Rename</span>` : ""}</button>`;
+    });
+    html += `</div>`;
+  }
+  if(!html) html = `<p class="hint">No skills match.</p>`;
+  html += `<div class="mine-box"><span class="lab">Skills on your laptop</span>
+    <div class="btns"><button class="btn" id="btn-local">Add skills from my laptop</button>${LOCAL.length ? `<button class="edit q" id="btn-forget">Forget mine</button>` : ""}</div>
+    <p class="hint">Choose your skills folder. In the dialog press Cmd+Shift+G and type <code>~/.agents/skills</code>. Nothing is uploaded: the page only reads names and descriptions.</p></div>`;
+  const list = $("#plist"), top = list.scrollTop;
+  list.innerHTML = html; list.scrollTop = top;
+  $("#pbanner").innerHTML = pendingGroup ? `<span>Adding to a group that runs together</span><button class="edit q" data-cancel>Cancel</button>`
+    : pendingInsert !== null ? `<span>Pick a skill to insert at step ${pendingInsert + 1}</span><button class="edit q" data-cancel>Cancel</button>` : "";
+}
+
+/* ---------- export ---------- */
+function stepsText(mode){
+  const prompt = mode === "prompt";
+  const codex = state.tool === "codex";
+  const ref = n => codex ? "`$" + n + "`" : "`" + n + "`";
+  const lc = s => s ? s.charAt(0).toLowerCase() + s.slice(1) : "";
+  const out = [];
+  state.steps.forEach((s, i) => {
+    const h = `Step ${i + 1}`;
+    if(s.type === "skill"){
+      const k = BY[s.skill] || {};
+      out.push(`## ${h}: ${k.label || s.skill}\n` + (prompt
+        ? `If you have a skill called ${ref(s.skill)}, use it. If not, do this yourself: ${lc(k.gives) || s.skill}.`
+        : `Use the ${ref(s.skill)} skill. It produces: ${lc(k.gives) || "its normal output"}.`)
+        + (s.note ? `\nWhy this step: ${s.note}` : ""));
+    } else if(s.type === "approval"){
+      out.push(`## ${h}: Wait for approval\nStop here. Show what the previous steps produced. Ask: "${s.text || "Check the result before moving on."}"\nThen end your reply and do nothing else. Do not start the next step until I have replied with a clear yes.`);
+    } else if(s.type === "question"){
+      out.push(`## ${h}: Ask me\nAsk me: "${s.text || "What do you need to know before carrying on?"}"\n` + (codex || prompt
+        ? `Then end your reply and wait for my answer. Do not guess. Use my answer in the steps that follow.`
+        : `Use the AskUserQuestion tool if it is available, otherwise ask in chat. Wait for the answer and use it in the steps that follow.`));
+    } else if(s.type === "together"){
+      const list = s.skills.map(n => `- ${skillLabel(n)} (${ref(n)})`).join("\n") || "- (no skills chosen yet)";
+      out.push(`## ${h}: Do these at the same time\n${list}\n` + (prompt
+        ? `Work through each on the same material. Then combine the results into one list and merge any duplicates.`
+        : codex
+          ? `Ask for a separate subagent for each, so they run at the same time. Then combine the results into one list and merge any duplicates.`
+          : `Run each in its own subagent if subagents are available, otherwise one after another. Then combine the results into one list and merge any duplicates.`)
+        + (s.note ? `\nWhy together: ${s.note}` : ""));
+    }
+  });
+  return out.join("\n\n");
+}
+function dataBlock(){ return `<!-- workflow-builder:data ${encodeURIComponent(JSON.stringify(snapshot()))} -->`; }
+function buildOut(mode){
+  const name = state.name || "My workflow";
+  const sl = slug(name);
+  const codex = state.tool === "codex";
+  const dir = codex ? "~/.agents/skills" : "~/.claude/skills";
+  const rules = `Work through these steps in order. Do not skip ahead and do not start a step early. At every approval step, stop completely and wait for me to say yes in my own words.`;
+  if(mode === "prompt") return `I want to run a workflow called "${name}". ${rules}\n\n${stepsText("prompt") || "(No steps yet.)"}\n\nStart with step 1 now.`;
+  const call = codex ? "$" + sl : "/" + sl;
+  const desc = `Runs the "${name}" workflow in ${state.steps.length} steps, stopping for approval where marked. Use when the user types ${call} or asks to run the ${name} workflow.`;
+  const file = `---\nname: ${sl}\ndescription: ${desc}\n---\n\n# ${name}\n\n${rules}\n\n${stepsText("skill") || "(No steps yet.)"}\n\n${dataBlock()}\n`;
+  if(mode === "skill") return file;
+  return `Please install a new skill for me. Create the file ${dir}/${sl}/SKILL.md (make the folder if it does not exist) with exactly the contents between the lines of tildes below. Do not change, summarise or reformat anything. If the file already exists, replace it. When it is saved, tell me the path and that I can start it by typing ${call}.\n\n~~~~\n${file}~~~~`;
+}
+function renderExport(){
+  const out = $("#out"); if(!out) return;
+  out.textContent = buildOut(exportTab);
+  const sl = slug(state.name), codex = state.tool === "codex";
+  const dir = codex ? "~/.agents/skills" : "~/.claude/skills";
+  const call = codex ? "$" + sl : "/" + sl;
+  const who = codex ? "Codex" : "Claude";
+  const pause = `Pauses are instructions the model follows in a normal chat. They are not enforced, and they do not work in non-interactive runs.`;
+  const note = codex ? ` The Codex app has not been tested here: check it finds the skill the first time.` : ``;
+  $("#exphint").innerHTML = exportTab === "install"
+    ? `Copy this, open a new ${who} chat, paste it and send. ${who} saves the skill for you and may ask permission to write the file. Then type <code>${e(call)}</code>.${note} ${pause}`
+    : exportTab === "skill"
+    ? `Save as <code>${dir}/${e(sl)}/SKILL.md</code>, then type <code>${e(call)}</code>.${note} ${pause}`
+    : `Paste into any chat. It cannot call installed skills, so each step falls back to doing the job itself. ${pause}`;
+}
+
+/* ---------- skills from this laptop ---------- */
+function parseFront(text){
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/); if(!m) return {};
+  const out = {}; let key = null;
+  m[1].split(/\r?\n/).forEach(line => {
+    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
+    if(kv){ key = kv[1]; let v = kv[2].trim(); if(v === ">" || v === "|" || v === ">-" || v === "|-") v = ""; out[key] = v.replace(/^['"]|['"]$/g, ""); }
+    else if(key && /^\s/.test(line)) out[key] = (out[key] + " " + line.trim()).trim();
+  });
+  return out;
+}
+function saveLocal(){ store("wfb.local", LOCAL); }
+async function readFolder(files){
+  const found = [];
+  for(const f of files){
+    const parts = (f.webkitRelativePath || "").split("/");
+    if(f.name !== "SKILL.md" || parts.length !== 3) continue;     // skills/<name>/SKILL.md
+    const fm = parseFront(await f.text());
+    const name = fm.name || parts[1];
+    const first = (fm.description || "").split(/(?<=[.!?])\s/)[0] || "";
+    found.push({name, label: name, gives: first.length > 110 ? first.slice(0, 109).trimEnd() + "..." : first, when:"", group:"My skills", mine:true, installed:true});
+  }
+  return found;
+}
+$("#localfolder").addEventListener("change", async ev => {
+  const found = await readFolder([...ev.target.files]); ev.target.value = "";
+  if(!found.length){ toast("No skills found. Choose the skills folder itself"); return; }
+  const labels = Object.fromEntries(LOCAL.map(l => [l.name, l.label]));
+  LOCAL = found.map(f => ({...f, label: labels[f.name] || f.label}));
+  saveLocal(); rebuildSkills(); render(); toast(found.length + " skills added from your laptop");
+});
+(function(){ const saved = store("wfb.local"); if(Array.isArray(saved)){ LOCAL = saved; rebuildSkills(); } })();
+function finishRename(input){
+  const n = input.dataset.renameinput, v = input.value.trim(), l = LOCAL.find(x => x.name === n);
+  if(l && v) l.label = v;
+  renaming = null; saveLocal(); rebuildSkills(); render();
+}
+
+/* ---------- theme: same behaviour as Themes and Levers ---------- */
+(function themeToggle(){
+  const root = document.documentElement, btn = $("#themetoggle");
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const resolved = () => root.getAttribute("data-theme") || (mq.matches ? "dark" : "light");
+  const label = () => { const next = resolved() === "dark" ? "light" : "dark"; btn.setAttribute("aria-label", "Switch to " + next + " theme"); btn.setAttribute("title", "Switch to " + next + " theme"); };
+  const apply = next => { root.setAttribute("data-theme", next); try{ localStorage.setItem("wfb-theme", next); }catch(_){} label(); };
+  btn.addEventListener("click", () => {
+    const next = resolved() === "dark" ? "light" : "dark";
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(!document.startViewTransition || reduced){ apply(next); return; }
+    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const far = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    root.style.setProperty("--sx", x + "px"); root.style.setProperty("--sy", y + "px"); root.style.setProperty("--sr", far + "px");
+    const dir = next === "light" ? "vt-on" : "vt-off";
+    root.classList.add(dir);
+    const t = document.startViewTransition(() => apply(next));
+    const clear = () => root.classList.remove(dir);
+    t.finished.then(clear, clear);
+  });
+  if(mq.addEventListener) mq.addEventListener("change", label);
+  label();
+})();
+
+/* ---------- events ---------- */
+$("#btn-open").onclick = () => $("#file").click();
+$("#file").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; if(!f) return;
+  const m = (await f.text()).match(/workflow-builder:data (\S+) -->/);
+  if(!m){ toast("That file was not made by this tool"); ev.target.value = ""; return; }
+  try{ const d = JSON.parse(decodeURIComponent(m[1])); loadFlow(d); toast("Opened " + d.name); }
+  catch(_){ toast("Could not read that file"); }
+  ev.target.value = "";
+});
+$("#search").addEventListener("input", ev => { search = ev.target.value; renderLib(); });
+document.addEventListener("keydown", ev => {
+  if(ev.key === "Escape" && openMenu !== null){ openMenu = null; render(); return; }
+  const r = ev.target.closest?.("[data-rename]");
+  if(r && (ev.key === "Enter" || ev.key === " ")){ ev.preventDefault(); renaming = r.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
+  const inp = ev.target.closest?.("[data-renameinput]");
+  if(inp && ev.key === "Enter"){ ev.preventDefault(); finishRename(inp); }
+  if(inp && ev.key === "Escape"){ renaming = null; renderLib(); }
+});
+document.addEventListener("focusout", ev => { const inp = ev.target.closest?.("[data-renameinput]"); if(inp && renaming) finishRename(inp); });
+
+document.addEventListener("click", ev => {
+  const t = ev.target;
+  const rn = t.closest("[data-rename]"); if(rn){ renaming = rn.dataset.rename; renderLib(); document.querySelector("[data-renameinput]")?.focus(); return; }
+  if(t.closest("[data-renameinput]")) return;
+  const sk = t.closest("[data-skill]"); if(sk){ addSkill(sk.dataset.skill); return; }
+  if(t.closest("[data-cancel]")){ pendingInsert = null; pendingGroup = null; renderLib(); return; }
+  if(t.closest("#btn-local")){ $("#localfolder").click(); return; }
+  if(t.closest("#btn-forget")){ LOCAL = []; saveLocal(); rebuildSkills(); render(); return; }
+  const g = t.closest("[data-go]"); if(g){ const n = +g.dataset.go; if(n === 1 || reached2) go(n); return; }
+  const op = t.closest("[data-open]"); if(op){ const f = (store("wfb.flows") || {})[op.dataset.open]; if(f) loadFlow(f); return; }
+  const df = t.closest("[data-delflow]"); if(df){ const all = store("wfb.flows") || {}; delete all[df.dataset.delflow]; store("wfb.flows", all); render(); return; }
+  if(t.closest("[data-happy]")){ if(valid()){ reached2 = true; go(2); } return; }
+  const tl = t.closest("[data-tool]"); if(tl){ state.tool = tl.dataset.tool; render(); return; }
+  const tb = t.closest("[data-tab]"); if(tb){ exportTab = tb.dataset.tab; render(); return; }
+  if(t.closest("#btn-copy")){ navigator.clipboard.writeText($("#out").textContent).then(() => toast("Copied"), () => toast("Copy blocked: select the text instead")); return; }
+  if(t.closest("#btn-dl")){
+    const blob = new Blob([$("#out").textContent], {type:"text/markdown"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = exportTab === "skill" ? "SKILL.md" : slug(state.name) + "-" + exportTab + ".md"; a.click(); URL.revokeObjectURL(a.href); return;
+  }
+  const mn = t.closest("[data-menu]");
+  if(mn){
+    const kind = mn.dataset.menu, at = openMenu; openMenu = null;
+    if(kind === "skill"){ pendingInsert = at; render(); $("#search").focus(); }
+    else { insertStep(at, DEFAULTS[kind]()); render(); }
+    return;
+  }
+  const act = t.closest("[data-act]");
+  if(act){
+    const a = act.dataset.act;
+    if(a === "menu"){ const slot = act.closest("[data-slot]"); const i = slot ? +slot.dataset.slot : state.steps.length; openMenu = openMenu === i ? null : i; render(); return; }
+    if(a === "clear"){ state.steps = []; reached2 = false; render(); return; }
+    if(a === "save"){
+      if(!state.name.trim()){ toast("Name your workflow first"); return; }
+      const all = store("wfb.flows") || {}; all[state.name.trim()] = snapshot(); store("wfb.flows", all); toast("Saved in this browser"); return;
+    }
+    const id = act.closest("[data-id]")?.dataset.id; const i = state.steps.findIndex(s => s.id === id);
+    if(i < 0) return;
+    if(a === "addtogether"){ pendingGroup = id; pendingInsert = null; renderLib(); $("#search").focus(); return; }
+    if(a === "del") state.steps.splice(i, 1);
+    if(a === "up" && i > 0) [state.steps[i-1], state.steps[i]] = [state.steps[i], state.steps[i-1]];
+    if(a === "down" && i < state.steps.length - 1) [state.steps[i+1], state.steps[i]] = [state.steps[i], state.steps[i+1]];
+    if(a === "rmchip") state.steps[i].skills.splice(+act.dataset.j, 1);
+    render(); return;
+  }
+  if(openMenu !== null && !t.closest(".menu")){ openMenu = null; render(); }
+});
+
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if(t.id === "name1"){ state.name = t.value; const h = $("#happy"); if(h) h.disabled = !valid(); return; }
+  const f = t.closest("[data-field]"); if(!f) return;
+  const id = f.closest("[data-id]").dataset.id; state.steps.find(s => s.id === id)[f.dataset.field] = f.value;
+});
+
+/* drag and drop: library cards and step handles onto slots, library cards onto a group */
+let dragData = null;
+document.addEventListener("dragstart", ev => {
+  const sk = ev.target.closest?.("[data-skill]"); const h = ev.target.closest?.("[data-handle]");
+  if(sk){ dragData = {kind:"lib", skill:sk.dataset.skill}; }
+  else if(h){ const stp = h.closest("[data-id]"); dragData = {kind:"step", id:stp.dataset.id}; stp.classList.add("dragging"); }
+  else return;
+  ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", "wfb");
+});
+document.addEventListener("dragend", () => { dragData = null; document.querySelectorAll(".dragging,.over").forEach(n => n.classList.remove("dragging","over")); });
+document.addEventListener("dragover", ev => {
+  if(!dragData) return;
+  const slot = ev.target.closest("[data-slot]"), grp = ev.target.closest("[data-group]");
+  document.querySelectorAll(".over").forEach(n => n.classList.remove("over"));
+  if(slot || (grp && dragData.kind === "lib")){ ev.preventDefault(); (slot || grp).classList.add("over"); }
+});
+document.addEventListener("drop", ev => {
+  if(!dragData) return;
+  const slot = ev.target.closest("[data-slot]"), grp = ev.target.closest("[data-group]");
+  if(slot){
+    const i = +slot.dataset.slot;
+    if(dragData.kind === "lib") insertStep(i, {type:"skill", skill:dragData.skill, note:""}); else moveStep(dragData.id, i);
+  } else if(grp && dragData.kind === "lib"){
+    const s = state.steps.find(x => x.id === grp.closest("[data-id]").dataset.id);
+    if(!s.skills.includes(dragData.skill)) s.skills.push(dragData.skill);
+  } else return;
+  ev.preventDefault(); dragData = null; render();
+});
+
+render();
+</script>
+</body>
+</html>
